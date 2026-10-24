@@ -1485,7 +1485,11 @@ function endGame(won){
 
 // The link that travels with every share. Change this one line if the game
 // moves to its own domain.
-const GAME_URL = "https://bibi-kum.remesor.workers.dev/";
+// ?v=2 is a cache-buster: WhatsApp had already cached this link while the
+// preview image was missing, and it holds that result for days. The suffix
+// makes it a URL it has never seen, so the preview renders straight away.
+// Once the plain link's cache has expired it can be dropped.
+const GAME_URL = "https://bibi-kum.remesor.workers.dev/?v=2";
 
 function shareText(){
   if (S.outcome === "win"){
