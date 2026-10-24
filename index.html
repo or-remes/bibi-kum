@@ -12,8 +12,9 @@
 <meta property="og:locale" content="he_IL">
 <meta property="og:title" content="ביבי קום! – המשחק 🚨">
 <meta property="og:description" content="נראה אתכם מצליחים להעיר אותו לפני 6:30 – שחקו עכשיו!">
-<meta property="og:image" content="og.jpg">
-<meta property="og:image:secure_url" content="og.jpg">
+<meta property="og:url" content="https://bibi-kum.remesor.workers.dev/">
+<meta property="og:image" content="https://bibi-kum.remesor.workers.dev/og.jpg">
+<meta property="og:image:secure_url" content="https://bibi-kum.remesor.workers.dev/og.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -21,8 +22,17 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="ביבי קום! – המשחק 🚨">
 <meta name="twitter:description" content="נראה אתכם מצליחים להעיר אותו לפני 6:30 – שחקו עכשיו!">
-<meta name="twitter:image" content="og.jpg">
+<meta name="twitter:image" content="https://bibi-kum.remesor.workers.dev/og.jpg">
 <title>ביבי קום! – המשחק 🚨</title>
+
+<!-- Google Analytics (GA4) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-VCRSBW7CJ8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-VCRSBW7CJ8');
+</script>
 <style>
 /* ============================================================
    ביבי קום!  —  single file arcade clicker
@@ -606,6 +616,17 @@ img, .bibi, .bub, .tool, .btn{-webkit-touch-callout:none;}
 "use strict";
 
 /* ============================================================
+   ANALYTICS — page views come from the tag itself; these are the
+   events that say how the game is actually played. Every call is
+   wrapped, so a blocked or missing tag never breaks the game.
+   ============================================================ */
+function track(name, params){
+  try{
+    if (typeof gtag === "function") gtag("event", name, params || {});
+  }catch(e){}
+}
+
+/* ============================================================
    ART — every image is embedded, so this file works on its own
    ============================================================ */
 const ART = {
@@ -1010,6 +1031,7 @@ function completeStage(){
   clearBubbles(false);
   field.querySelectorAll(".fx").forEach(n => n.remove());
 
+  track("stage_complete", { stage: S.stage, clock: currentClock() });
   const tool = TOOLS[next - 1];
   $("sc-title").textContent = "שלב " + next + " נפתח!";
   $("sc-art").src = ART[tool.img];
@@ -1264,6 +1286,7 @@ function useTool(i){
   const tool = TOOLS[i];
   S.cooldowns[i] = tool.cd;
 
+  track("tool_used", { tool: tool.id, stage: S.stage });
   toolFX(tool);
   (sfx[tool.id] || sfx.tool)();
 
@@ -1410,6 +1433,7 @@ function startGame(){
   show("game");
   fitStage();
   startMusic();
+  track("game_start");
   S.lastFrame = performance.now();
   S.running = true;
   tone(880, 0.12, "square", 0.07);
@@ -1449,13 +1473,19 @@ function endGame(won){
     $("end-line").textContent = "השעה " + finalClock + " והוא ישן, כל האחריות עליך. ניפגש בוועדת החקירה חחחח סתם לא תהיה כזאת";
     sfx.lose();
   }
+  track(won ? "game_win" : "game_lose", {
+    stage_reached: S.stage,
+    clock: finalClock,
+    wakefulness: S.finalWake,
+    targets_popped: S.pops
+  });
   buzz(won ? [40,60,120] : [200]);
   show("end");
 }
 
 // The link that travels with every share. Change this one line if the game
 // moves to its own domain.
-const GAME_URL = "https://claude.ai/artifact/7v7GyVegS4rPQfvfhFrk7t";
+const GAME_URL = "https://bibi-kum.remesor.workers.dev/";
 
 function shareText(){
   if (S.outcome === "win"){
@@ -1481,6 +1511,9 @@ $("sc-go").addEventListener("click", beginPendingStage);
 function shareLink(){
   return "https://api.whatsapp.com/send?text=" + encodeURIComponent(shareText());
 }
+function shareSource(){
+  return S.outcome === "win" ? "win_screen" : S.outcome === "lose" ? "lose_screen" : "in_game";
+}
 
 // Refresh the href just before the tap opens it, so the message always matches
 // the screen the player is on.
@@ -1493,6 +1526,7 @@ function armShare(el){
   // If the frame refuses to open a new tab, nothing visible happens. Put the
   // message on the clipboard instead and say so, rather than leaving a dead tap.
   el.addEventListener("click", () => {
+    track("share_click", { from: shareSource() });
     const before = Date.now();
     setTimeout(() => {
       if (document.hidden || Date.now() - before > 1200) return;   // it opened
