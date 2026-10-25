@@ -148,6 +148,14 @@ img, .bibi, .bub, .tool, .btn{-webkit-touch-callout:none;}
 }
 .start__tag b{color:var(--amber); font-weight:800;}
 .start__actions{display:flex; flex-direction:column; gap:12px; width:min(100%, 300px);}
+.credit{
+  position:absolute; left:0; right:0;
+  bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+  text-align:center;
+  font-size:11px; font-weight:400; line-height:1;
+  color:#7A82AC;
+  pointer-events:none;
+}
 
 /* ---------- buttons ---------- */
 .btn{
@@ -411,6 +419,21 @@ img, .bibi, .bub, .tool, .btn{-webkit-touch-callout:none;}
 }
 .tool__lock small{font-size:9px; font-weight:600; opacity:.75;}
 
+/* Nudge 1 — the analytics said 59% of players never pressed a tool at all.
+   If stage 1 is under way and nothing has been tried, the first tile breathes. */
+.tool.nudge{animation:nudge 1.05s ease-in-out infinite;}
+@keyframes nudge{
+  0%,100%{box-shadow:inset 0 0 0 1px rgba(255,194,74,.45); transform:scale(1);}
+  50%{box-shadow:inset 0 0 0 2px rgba(255,194,74,1), 0 0 16px rgba(255,194,74,.6); transform:scale(1.04);}
+}
+/* Nudge 2 — tool users fired roughly 1.7 of the 4 shots a stage allows,
+   so say out loud the moment a tile is usable again. */
+.tool.pulse{animation:pulse .45s ease-out 2;}
+@keyframes pulse{
+  from{box-shadow:inset 0 0 0 2px rgba(255,194,74,.95), 0 0 14px rgba(255,194,74,.55);}
+  to{box-shadow:inset 0 0 0 1px rgba(255,194,74,.4);}
+}
+
 /* screen flash on big events */
 .fx{
   position:absolute; z-index:14; pointer-events:none;
@@ -556,6 +579,7 @@ img, .bibi, .bub, .tool, .btn{-webkit-touch-callout:none;}
     <div class="start__actions">
       <button class="btn" id="btn-start">התחלת משחק</button>
     </div>
+    <p class="credit" dir="ltr">© Developed by אור רמס</p>
   </section>
 
   <!-- ============ GAME ============ -->
@@ -668,7 +692,8 @@ const CFG = {
   TARGET_H_MIN  : 64,
   TARGET_H_MAX  : 82,
   SPAWN_TRIES   : 24,        // candidate spots sampled to keep bubbles apart
-  DRAIN_HOLD    : 0.12       // seconds of drain relief bought by each hit
+  DRAIN_HOLD    : 0.12,      // seconds of drain relief bought by each hit
+  HINT_AFTER    : 4          // seconds into stage 1 before the first tile is nudged
 };
 
 // The mouthpieces. Each is sized by height so the faces stay visually even
@@ -723,6 +748,7 @@ const S = {
   stage:1,             // 1..3
   warned:false,        // the "8 seconds left" toast fires once per stage
   hold:0,              // drain relief bought by a recent hit
+  toolEverUsed:false,  // has the player discovered the tools at all?
   pendingStage:0,      // stage waiting behind the stage-up card
   outcome:null,
   lastFrame:0
@@ -1246,7 +1272,8 @@ function clearBubbles(byPlayer){
 /* ============================================================
    TOOLBAR
    ============================================================ */
-const cdNodes = [], cdPaint = [], readyPaint = [];
+const cdNodes = [], cdPaint = [], readyPaint = [], pulseTimer = [];
+let nudgePaint = null, hintReported = false;
 
 function buildRail(){
   rail.innerHTML = "";
@@ -1287,6 +1314,7 @@ function useTool(i){
   S.cooldowns[i] = tool.cd;
 
   track("tool_used", { tool: tool.id, stage: S.stage });
+  S.toolEverUsed = true;
   toolFX(tool);
   (sfx[tool.id] || sfx.tool)();
 
@@ -1328,8 +1356,22 @@ function renderRail(){
     const ready = S.unlocked[i] && cd <= 0;
     if (ready !== readyPaint[i]){
       tile.classList.toggle("ready", ready);
+      // coming off cooldown is the moment worth announcing
+      if (ready && readyPaint[i] === false){
+        tile.classList.add("pulse");
+        clearTimeout(pulseTimer[i]);
+        pulseTimer[i] = setTimeout(() => tile.classList.remove("pulse"), 1000);
+      }
       readyPaint[i] = ready;
     }
+  }
+
+  // the first tile breathes until the player tries a tool, in stage 1 only
+  const nudge = S.running && S.stage === 1 && !S.toolEverUsed && S.t >= CFG.HINT_AFTER;
+  if (nudge !== nudgePaint){
+    tiles[0].classList.toggle("nudge", nudge);
+    nudgePaint = nudge;
+    if (nudge && !hintReported){ hintReported = true; track("tool_hint_shown"); }
   }
 }
 
@@ -1411,6 +1453,10 @@ function startGame(){
   S.stage = 1;
   S.warned = false;
   S.hold = 0;
+  S.toolEverUsed = false;
+  nudgePaint = null;
+  hintReported = false;
+  pulseTimer.forEach(clearTimeout);
   S.pendingStage = 0;
   S.outcome = null;
 
